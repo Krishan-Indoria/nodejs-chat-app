@@ -1,0 +1,368 @@
+</body>
+<script>
+    var currentId = null;
+    var img_upload_btn = document.getElementById('img-upload');
+    var file_el = document.getElementById('file-upload-input');
+
+    function handleLoad() {
+        var token = localStorage.getItem('token');
+        console.log('token', token)
+        const socket = io({
+            auth: {
+                token
+            }
+        });
+        window.socket = socket;
+        console.log('socket', socket);
+        
+        // socket.on('user:list:resp', (users) => {
+        //     console.log('users 2', users);
+        //     try {
+        //         users.forEach(user => {
+        //             append_user(user._id, user.name, user.username, user.image) // user.image
+        //         });
+        //     } catch {}
+        // })
+
+        setTimeout(() => {
+            if(!socket.connected) {
+                window.location.href = "/login"
+            }
+        }, 2000);
+
+        socket.on('user:profile', (user) => {
+            console.log('user.name', user)
+            try {
+                document.getElementById('user-name').innerText = user.username
+                profile_body(user.name, user.username, user.image, user.createdAt);
+            } catch {}
+            return;
+        })
+
+        socket.on('connect_error', err => handleErrors(err, 'connect_error'))
+        socket.on('connect_failed', err => console.log(err, 'connect_failed'))
+        socket.on('disconnect', err => console.log(err, 'disconnect'))
+
+        socket.on('another:connect', old_socket => {
+            console.log('another connected', socket.id, old_socket);
+            socket.id == old_socket && socket.disconnect();
+            Toastify({
+                text: 'Same User login elsewhere',
+                duration: 5000,
+                position: "center"
+                }).showToast();
+        })
+
+        socket.on('new:user', user => {
+            user && append_user(user._id, user.name, user.username, user.image);
+        });
+
+        socket.on('user-connected', userId => {
+            console.log('user connected', userId);
+            document.getElementById('online_' + userId).classList.add('bg-title')
+            document.getElementById('online_' + userId).classList.add('shadow-md')
+            document.getElementById('online_' + userId).classList.add('shadow-title')
+        })
+
+        socket.on('user-disconnected', userId => {
+            console.log('user disconnected', userId);
+            document.getElementById('online_' + userId).classList.remove('bg-title')
+            document.getElementById('online_' + userId).classList.remove('shadow-md')
+            document.getElementById('online_' + userId).classList.remove('shadow-title')
+        })
+
+
+        socket.on('message:received', msg_obj => {
+            console.log('message:received got', msg_obj)
+            if(currentId == msg_obj.senderId) {
+                if(msg_obj.msg_type == "message") {
+                    append_message('receive', currentId, msg_obj.message, msg_obj.image)
+                }
+                else {
+                    append_message('receive', currentId, msg_obj.message, msg_obj.image, msg_obj.msg_type)
+                }
+                var msg_box = document.getElementById('chat-messages');
+                msg_box.scrollTo(0, msg_box.scrollHeight);
+            }
+            else {
+                Toastify({
+                text: msg_obj.senderName + ' send you a message',
+                duration: 3000,
+                onClick: () => getUserChat(msg_obj.senderId)
+                }).showToast();
+            }
+        })
+
+
+        socket.on('user:current:online', user_socket_list => {
+            setTimeout(() => {
+            for(let i = 0; i < user_socket_list.length; i++) {
+                var online_el =  document.getElementById('online_' + user_socket_list[i].userId);
+                console.log('online_el', online_el);
+                if(online_el) {
+                    online_el.classList.add('bg-title');
+                    online_el.classList.add('shadow-md');
+                    online_el.classList.add('shadow-title');
+                }
+            }
+            }, 1000)
+        })
+
+        socket.on('connect',() => {
+            console.log('connected to server');
+        })
+        socket.on('disconnect',() => {
+            console.log('disconnected from server');
+        })
+
+        
+    }
+
+    function loadUsers() {
+        var user_box = document.getElementById('chat-users');
+        user_box.innerHTML = '<div class="loader m-auto mt-12"></div>'
+
+        window.socket.emit("user:list", (users) => {
+            console.log('users', users);
+            user_box.innerHTML = '';
+
+            users.forEach(user => {
+                append_user(user._id, user.name, user.username, user.image) // user.image
+            });
+            document.querySelectorAll('img').forEach(el => {
+                new Viewer(el)
+            })
+        });
+    }
+
+    window.addEventListener('load', () => {
+        // const gallery = new Viewer(document.querySelectorAll('img'));
+        
+        setTimeout(() => {
+            loadUsers();
+        }, 500);
+
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            localStorage.clear();
+            window.location.href = '/login'
+        })
+
+        img_upload_btn.addEventListener('click', () => {
+            file_el.click();
+        })
+
+        file_el.addEventListener('change', (e) => {
+            var img = e.target.files[0];
+            if(img.size/1024 > 2000) {
+                Toastify({
+                text: 'Max Image Size 2MB',
+                duration: 3000,
+                }).showToast();
+                return;
+            }
+            var form_data = new FormData();
+            form_data.append('image', img);
+            fetch('/api/image-upload', {method: "POST", body: form_data})
+            .then(res => res.json())
+            .then(resp => {
+                if(!resp.status) {
+                    Toastify({
+                    text: resp.message,
+                    duration: 3000,
+                    }).showToast();
+                    return;
+                }
+                
+                window.socket.volatile.emit("chat:send:image", {
+                    userId: currentId,
+                    type: 'image',
+                    image: resp.image
+                }, (data) => {
+                    console.log('chat', data.name);
+                    append_message('send', currentId, resp.image, data.image, 'image')
+                    input_msg.value = '';
+                    var msg_box = document.getElementById('chat-messages');
+                    msg_box.scrollTo(0, msg_box.scrollHeight);
+                });
+                
+            })
+        })
+
+        var input_msg = document.getElementById('send-message-input');
+        input_msg.addEventListener('keyup', (e) => {
+            if(currentId && e.keyCode == 13) {
+                window.socket.volatile.emit("chat:send:message", {
+                    userId: currentId,
+                    message: e.target.value,
+                    type: 'message'
+                }, (data) => {
+                    console.log('chat', data.name);
+                    append_message('send', currentId, e.target.value, data.image)
+                    input_msg.value = '';
+                    var msg_box = document.getElementById('chat-messages');
+                    msg_box.scrollTo(0, msg_box.scrollHeight);
+                });
+            }
+        })
+    })
+
+    function handleErrors(err, type) {
+        console.log(type, err)
+        // window.location.href = '/login'
+    }
+
+    function append_user(id, name, username, image) {
+        var body = `<div id="user_${id}"
+        class="flex flex-row py-4 px-2 justify-center items-center border-b-2 cursor-pointer hover:opacity-90"
+        onClick="getUserChat('${id}')"
+        >
+        <div class="w-1/4">
+        <img
+            src="/${image}"
+            class="object-cover h-12 w-12 rounded-full"
+            alt=""
+        />
+        </div>
+        <div class="w-full">
+        <div class="text-lg font-semibold">${name}</div>
+        <span class="text-gray-500">@${username}</span>
+        </div>
+        <div class="w-1/4">
+        <div class="h-2 w-2 rounded-full" id="online_${id}"></div>
+        </div>
+        </div>`
+
+        document.getElementById('chat-users').insertAdjacentHTML('beforeend', body);
+    }
+
+    function append_message(type, id, message, image, m_type = "message") {
+        var body = '';
+        if(type == 'send') {
+            if(m_type == "message") {
+                body = `<div class="flex justify-end mb-4" id="${id}">
+                <div
+                class="mr-2 py-3 px-4 bg-title rounded-bl-3xl rounded-tl-3xl rounded-tr-xl text-desc"
+                >
+                ${message}
+                </div>
+                <img
+                src="/${image}"
+                class="object-cover h-8 w-8 rounded-full"
+                alt=""
+                />
+                </div>`;
+            }
+            else {
+                body = `<div class="flex justify-end mb-4" id="${id}">
+                <div
+                class="mr-2 py-3 px-4 bg-title rounded-bl-3xl rounded-tl-3xl rounded-tr-xl text-desc"
+                >
+                    <img
+                    src="/${message}"
+                    class="object-cover h-20 w-20 rounded"
+                    alt=""
+                    />
+                </div>
+                <img
+                src="/${image}"
+                class="object-cover h-8 w-8 rounded-full"
+                alt=""
+                />
+                </div>`;
+            }
+        }
+        else {
+            if(m_type == "message") {
+                body = `<div class="flex justify-start mb-4" id="${id}">
+                    <img
+                    src="/${image}"
+                    class="object-cover h-8 w-8 rounded-full"
+                    alt=""
+                    />
+                    <div
+                    class="ml-2 py-3 px-4 bg-gray-400 rounded-br-3xl rounded-tr-3xl rounded-tl-xl text-white"
+                    >
+                    ${message}
+                    </div>
+                </div>`;
+            }
+            else {
+                body = `<div class="flex justify-start mb-4" id="${id}">
+                    <img
+                    src="/${image}"
+                    class="object-cover h-8 w-8 rounded-full"
+                    alt=""
+                    />
+                    <div
+                    class="ml-2 py-3 px-4 bg-gray-400 rounded-br-3xl rounded-tr-3xl rounded-tl-xl text-white"
+                    >
+                        <img
+                        src="/${message}"
+                        class="object-cover h-20 w-20 rounded"
+                        alt=""
+                        />
+                    </div>
+                </div>`;
+            }
+            
+        }
+
+        
+      document.getElementById('chat-messages').insertAdjacentHTML('beforeend', body);
+    }
+
+    function profile_body(name, username, image, createdAt) {
+        var body = `<div class="flex flex-col mt-2">
+        <div class="font-semibold text-xl">${name}</div>
+        <div class="font-light text-gray-300 pb-4">
+            @${username}
+        </div>
+        <img
+            src="/${image}"
+            class="object-cover rounded-xl h-64"
+            alt=""
+        />
+        <div class="font-semibold py-4">Created ${new Date(createdAt).toUTCString()}</div>
+        </div>`;
+      document.getElementById('user-profile').innerHTML = body;
+    }
+
+    function getUserChat(id) {
+        if(currentId == id) return;
+        if(currentId) {
+            var old_active_user = document.getElementById('user_' + currentId);
+            old_active_user.classList.remove('border-l-4')
+            old_active_user.classList.remove('border-title')
+        }
+
+        var active_user = document.getElementById('user_' + id);
+        active_user.classList.add('border-l-4')
+        active_user.classList.add('border-title')
+    
+        currentId = id;
+        img_upload_btn.classList.remove('hidden');
+        var msg_box = document.getElementById('chat-messages');
+        msg_box.innerHTML = '';
+        window.socket.emit("user:chat", id, (chat) => {
+            console.log('chat', chat);
+            chat.forEach(c => {
+                var type = id == c.userId_1 ? 'receive' : 'send';
+                console.log('type', type)
+                if(c.message_type == 'message') {
+                    append_message(type, c._id, c.message, c.image);
+                }
+                else {
+                    append_message(type, c._id, c.message, c.image, 'image');
+                }
+            });
+            setTimeout(() => {
+                msg_box.scrollTo(0, msg_box.scrollHeight);
+                new Viewer(document.getElementById('chat-messages'))
+                // document.querySelectorAll('img').forEach(el => {
+                //     new Viewer(el)
+                // })
+            }, 50);
+        });
+    }
+</script>
+</html>

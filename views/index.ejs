@@ -1,0 +1,48 @@
+<%- include('./layout/header'); %>
+
+
+<!-- This is an example component -->
+<div class="container mx-auto shadow-lg rounded-lg bg-primary shadow-md rounded">
+
+    <!-- headaer -->
+    <%- include('./partial/chat-header'); %>
+    <!-- end header -->
+
+<!-- Chatting -->
+<div class="flex flex-row justify-between">
+  <!-- chat list -->
+  <div class="flex flex-col w-2/5 border-r-2 overflow-y-auto">
+    <!-- search compt -->
+    <div class="border-b-2 py-4 px-2">
+      <input
+        type="text"
+        placeholder="search chatting"
+        class="py-2 px-2 border-2 border-gray-200 rounded-2xl w-full bg-secondary text-title px-4"
+      />
+    </div>
+    <!-- end search compt -->
+
+    <div id="chat-users" class="flex-1 overflow-y-auto">
+    <!-- user list -->
+    <%- include('./partial/chat-users'); %>
+    <!-- end user list -->
+    </div>
+  </div>
+  <!-- end chat list -->
+
+  <!-- message -->
+  <div class="sm:w-3/5">
+  <%- include('./partial/chat-messages'); %>
+  </div>
+  <!-- end message -->
+
+  <div class="w-1/5 border-l-2 px-5" id="user-profile">
+  </div>
+  
+  </div>
+</div>
+</div>
+
+
+
+<%- include('./layout/footer'); %>
