@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://kit.fontawesome.com/c939d0e917.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script>
+        tailwind.config = {
+          theme: {
+            extend: {
+              colors: {
+                primary: '#222831',
+                secondary: '#393E46',
+                title: '#00ADB5',
+                desc: '#EEEEEE'
+              }
+            }
+          }
+        }
+      </script>
+    <script>
+        const ROOM_ID = "<%= roomId %>";
+    </script>
+</head>
+<body class="bg-primary flex flex-col shadow-md" style="width: 100vw; height: 100vh; box-sizing: border-box;">
+    <div class="w-full bg-secondary text-center">
+      <div class="logo">
+        <h3 class="text-2xl text-title text-center py-2">Video Chat</h2>
+      </div>
+    </div>  
+    <div class="main flex justify-equal w-full h-full">  
+    <div class="main__left w-4/6 flex flex-col">
+      <div class="videos__group flex-1 shadow-md">
+        <div id="video-grid" class="grid md:grid-cols-2 lg:grid-cols-3">
+
+        </div>
+      </div>
+      <div class="flex py-2 px-4 text-desc bg-secondary">
+        <div class="options__left flex flex-1">
+          <div id="stopVideo" class="options__button rounded ring-1 ring-title py-2 px-4 bg-title mx-1">
+            <i class="fa fa-video-camera"></i>
+          </div>
+          <div id="muteButton" class="options__button rounded ring-1 ring-title py-2 px-4 bg-title mx-1">
+            <i class="fa fa-microphone"></i>
+          </div>
+        </div>
+        <div class="options__right">
+          <div id="inviteButton" class="options__button rounded ring-1 ring-title py-2 px-4 bg-title mx-1">
+            <i class="fas fa-user-plus"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="main__right w-2/6 flex flex-col border-l-2 border-secondary">
+      <div class="main__chat_window flex-1">
+          <div class="messages">
+
+          </div>
+      </div>
+      <div class="main__message_container flex items-center space-x-2 m-auto w-full p-2">
+        <input id="chat_message" type="text" autocomplete="off" placeholder="Type message here..."
+        class="flex-1 p-2 rounded text-secondary">
+        <div id="send" class="options__button rounded ring-1 ring-title py-2 px-4 bg-title">
+          <i class="fa fa-plus text-desc" aria-hidden="true"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  </body>
+<script src="/socket.io/socket.io.js" defer onload="handleLoad()"></script>
+<script src="/public/js/stream-script.js"></script>
+</html>

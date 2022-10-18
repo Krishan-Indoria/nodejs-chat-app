@@ -52,6 +52,29 @@ export default (io: Server) => {
       cb(chat);
     });
 
+    socket.on('user-peerId-update', async (id: string) => {
+      console.log('peer_update init')
+      var peer_update = await UserSocketModel.updateOne({ userId: payload.userId }, { peerId: id });
+      console.log('peer_update', payload.userId, peer_update)
+    });
+
+    socket.on('get:peer:id', async (userId, cb) => {
+      var user_socket = await UserSocketModel.findOne({ userId: userId }).lean();
+      if(!user_socket) return cb(null);
+      cb(user_socket.peerId);
+    });
+
+
+    // socket.on('user:peerId', async (peerId: string) => {
+    //   var user_socket1 = await UserSocketModel.exists({ userId: payload.userId, socketId: socket.id });
+    //   if(!user_socket1) {
+    //     await UserSocketModel.updateOne({ userId: payload.userId }, { socketId: socket.id, peerId })
+    //   };
+    //   // socket.broadcast.emit('peer:newId', { peerId, socketId: socket.id });
+    //   var _user_socket_list = await UserSocketModel.find({ socketId: {$in: Array.from(client)} }).lean();
+    //   socket.broadcast.emit('user:current:online', _user_socket_list);
+    // });
+
     socket.on('user:list', async (cb) => {
       let users = await fetch_user_list(payload.userId);
       cb(users);
@@ -96,6 +119,25 @@ export default (io: Server) => {
       }
     });
 
+    socket.on('chat:send:file', async (msg_obj, cb) => {
+      var userId = msg_obj.userId;
+      var message = msg_obj.file as string;
+      var msg_type = msg_obj.type as string;
+      msg_obj.message = message;
+      await send_message(payload.userId, userId, message, msg_type);
+
+      var user = await UserModel.findOne({ _id: payload.userId }).lean();
+      var user_socket1 = await UserSocketModel.findOne({ userId: userId }).lean();
+      cb(user);
+      if(user_socket1?.socketId) {
+        msg_obj.senderId = payload.userId;
+        msg_obj.senderName = user?.name;
+        msg_obj.image = user?.image;
+        msg_obj.msg_type = "file";
+        io.to(user_socket1.socketId).emit('message:received', msg_obj);
+      }
+    });
+
     socket.on('disconnect', async function () {
       var user_socket1 = await UserSocketModel.findOne({ socketId: socket.id }).lean();
       if(user_socket1) {
@@ -103,7 +145,14 @@ export default (io: Server) => {
       }
     });
 
-    
+    socket.on('join-room', (roomId: string, peerId: string) => {
+      socket.join(roomId);
+      socket.to(roomId).emit('user-connected', peerId);
+
+      socket.on('disconnect', () => {
+          socket.to(roomId).emit('user-disconnect', peerId);
+      })
+    })
 
   });
 

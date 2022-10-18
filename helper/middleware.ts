@@ -13,6 +13,7 @@ export default async (app: Express, _io: Server) => {
     await db.connect();
 
     app.use("/", express.static(__dirname + "/../images"));
+    app.use("/", express.static(__dirname + "/../files"));
     app.use("/public", express.static(__dirname + "/../public"));
     app.use(fileUpload())
     app.use(cors())
@@ -24,7 +25,6 @@ export default async (app: Express, _io: Server) => {
         try {
             var token = socket.handshake.auth?.token;
             let payload = await validate_token(token);
-            // console.log('payload', payload)
             next();
         }
         catch {

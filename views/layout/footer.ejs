@@ -1,12 +1,33 @@
 </body>
 <script>
+    // peerjs --port 9000 --key peerjs
+
+    var isModalOpen = false;
+    var myStream = null;
+    var myCall = null;
+    var current_user = null;
     var currentId = null;
+    var online_user_list = [];
+    var socket_list = [];
+    var peers = {};
+    var peer = new Peer(undefined, {
+        host: '/',
+        port: '9000',
+    });
+
+    var getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
     var img_upload_btn = document.getElementById('img-upload');
+    var file_upload_btn = document.getElementById('file-upload');
     var file_el = document.getElementById('file-upload-input');
+    var file_el_other = document.getElementById('file-upload-input_other');
+    var video_btn_el =  document.getElementById('video_call_button');
+    var videoGrid =  document.getElementById('video_grid');
+    var video_el =  document.createElement('video');
+    var close_call_btn = document.getElementById('close_call');
+    var make_call_btn = document.getElementById('make_call_btn');
 
     function handleLoad() {
         var token = localStorage.getItem('token');
-        console.log('token', token)
         const socket = io({
             auth: {
                 token
@@ -14,6 +35,7 @@
         });
         window.socket = socket;
         console.log('socket', socket);
+
         
         // socket.on('user:list:resp', (users) => {
         //     console.log('users 2', users);
@@ -28,10 +50,14 @@
             if(!socket.connected) {
                 window.location.href = "/login"
             }
-        }, 2000);
+            else {
+                loadUsers(socket)
+            }
+        }, 1200);
+        
 
         socket.on('user:profile', (user) => {
-            console.log('user.name', user)
+            current_user = user;
             try {
                 document.getElementById('user-name').innerText = user.username
                 profile_body(user.name, user.username, user.image, user.createdAt);
@@ -66,6 +92,13 @@
 
         socket.on('user-disconnected', userId => {
             console.log('user disconnected', userId);
+            if(peers[userId]) {
+                peers[userId].close();
+            }
+            var _user = online_user_list.find(s => s.userId == userId)
+            if(_user && userId == currentId) {
+                (!video_btn_el.classList.contains('hidden')) && video_btn_el.classList.add('hidden')
+            }
             document.getElementById('online_' + userId).classList.remove('bg-title')
             document.getElementById('online_' + userId).classList.remove('shadow-md')
             document.getElementById('online_' + userId).classList.remove('shadow-title')
@@ -73,7 +106,6 @@
 
 
         socket.on('message:received', msg_obj => {
-            console.log('message:received got', msg_obj)
             if(currentId == msg_obj.senderId) {
                 if(msg_obj.msg_type == "message") {
                     append_message('receive', currentId, msg_obj.message, msg_obj.image)
@@ -95,17 +127,29 @@
 
 
         socket.on('user:current:online', user_socket_list => {
+            online_user_list = [];
+            online_user_list = [...user_socket_list];
             setTimeout(() => {
             for(let i = 0; i < user_socket_list.length; i++) {
                 var online_el =  document.getElementById('online_' + user_socket_list[i].userId);
-                console.log('online_el', online_el);
-                if(online_el) {
-                    online_el.classList.add('bg-title');
-                    online_el.classList.add('shadow-md');
-                    online_el.classList.add('shadow-title');
+                var el = online_el?.classList;
+                if(online_el && !el.contains('bg-title')) {
+                    el.add('bg-title');
+                    el.add('shadow-md');
+                    el.add('shadow-title');
                 }
             }
             }, 1000)
+        })
+
+        // socket.on('peer:newId', (obj) => {
+        //     console.log('new peer user', obj);
+        //     socket_list.unshift(obj);
+        // })
+
+        socket.on('req:peer:id', (cb) => {
+            console.log('req-peer-id', peer.id);
+            cb(peer.id);
         })
 
         socket.on('connect',() => {
@@ -115,15 +159,20 @@
             console.log('disconnected from server');
         })
 
+        // socket.on('user-disconnect', userId => {
+        //     console.log('user-disconnect', userId);
+        //     peers[userId].close();
+        // })
+
+        
         
     }
 
-    function loadUsers() {
+    function loadUsers(_socket) {
         var user_box = document.getElementById('chat-users');
         user_box.innerHTML = '<div class="loader m-auto mt-12"></div>'
 
-        window.socket.emit("user:list", (users) => {
-            console.log('users', users);
+        _socket.emit("user:list", (users) => {
             user_box.innerHTML = '';
 
             users.forEach(user => {
@@ -138,13 +187,17 @@
     window.addEventListener('load', () => {
         // const gallery = new Viewer(document.querySelectorAll('img'));
         
-        setTimeout(() => {
-            loadUsers();
-        }, 500);
+        // setTimeout(() => {
+        //     loadUsers();
+        // }, 500);
 
         document.getElementById('logout-btn').addEventListener('click', () => {
             localStorage.clear();
             window.location.href = '/login'
+        })
+
+        file_upload_btn.addEventListener('click', () => {
+            file_el_other.click();
         })
 
         img_upload_btn.addEventListener('click', () => {
@@ -178,8 +231,37 @@
                     type: 'image',
                     image: resp.image
                 }, (data) => {
-                    console.log('chat', data.name);
                     append_message('send', currentId, resp.image, data.image, 'image')
+                    input_msg.value = '';
+                    var msg_box = document.getElementById('chat-messages');
+                    msg_box.scrollTo(0, msg_box.scrollHeight);
+                });
+                
+            })
+        })
+
+        file_el_other.addEventListener('change', (e) => {
+            var img = e.target.files[0];
+
+            var form_data = new FormData();
+            form_data.append('file', img);
+            fetch('/api/file-upload', {method: "POST", body: form_data})
+            .then(res => res.json())
+            .then(resp => {
+                if(!resp.status) {
+                    Toastify({
+                    text: resp.message,
+                    duration: 3000,
+                    }).showToast();
+                    return;
+                }
+                
+                window.socket.volatile.emit("chat:send:file", {
+                    userId: currentId,
+                    type: 'file',
+                    file: resp.image
+                }, (data) => {
+                    append_message('send', currentId, resp.image, data.image, 'file')
                     input_msg.value = '';
                     var msg_box = document.getElementById('chat-messages');
                     msg_box.scrollTo(0, msg_box.scrollHeight);
@@ -196,7 +278,6 @@
                     message: e.target.value,
                     type: 'message'
                 }, (data) => {
-                    console.log('chat', data.name);
                     append_message('send', currentId, e.target.value, data.image)
                     input_msg.value = '';
                     var msg_box = document.getElementById('chat-messages');
@@ -229,6 +310,11 @@
         </div>
         <div class="w-1/4">
         <div class="h-2 w-2 rounded-full" id="online_${id}"></div>
+        <button
+    id="video_call_button1"
+    class="hidden bg-title text-white active:bg-pink-600 font-bold uppercase text-sm px-6 py-3 rounded shadow hover:shadow-lg outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150" type="button" onclick="toggleModal('modal-id')">
+        V
+    </button>
         </div>
         </div>`
 
@@ -252,7 +338,7 @@
                 />
                 </div>`;
             }
-            else {
+            else if(m_type == "image") {
                 body = `<div class="flex justify-end mb-4" id="${id}">
                 <div
                 class="mr-2 py-3 px-4 bg-title rounded-bl-3xl rounded-tl-3xl rounded-tr-xl text-desc"
@@ -262,6 +348,20 @@
                     class="object-cover h-20 w-20 rounded"
                     alt=""
                     />
+                </div>
+                <img
+                src="/${image}"
+                class="object-cover h-8 w-8 rounded-full"
+                alt=""
+                />
+                </div>`;
+            }
+            else {
+                body = `<div class="flex justify-end mb-4" id="${id}">
+                <div
+                class="mr-2 py-3 px-4 bg-title rounded-bl-3xl rounded-tl-3xl rounded-tr-xl text-desc"
+                >
+                    <a href="/${message}" target="_blank" style="color: blue;">${message.replace('/', '')}</a>
                 </div>
                 <img
                 src="/${image}"
@@ -286,7 +386,7 @@
                     </div>
                 </div>`;
             }
-            else {
+            else if(m_type == "image") {
                 body = `<div class="flex justify-start mb-4" id="${id}">
                     <img
                     src="/${image}"
@@ -301,6 +401,20 @@
                         class="object-cover h-20 w-20 rounded"
                         alt=""
                         />
+                    </div>
+                </div>`;
+            }
+            else {
+                body = `<div class="flex justify-start mb-4" id="${id}">
+                    <img
+                    src="/${image}"
+                    class="object-cover h-8 w-8 rounded-full"
+                    alt=""
+                    />
+                    <div
+                    class="ml-2 py-3 px-4 bg-gray-400 rounded-br-3xl rounded-tr-3xl rounded-tl-xl text-white"
+                    >
+                        <a href="/${message}" target="_blank" style="color: blue;">${message.replace('/', '')}</a>
                     </div>
                 </div>`;
             }
@@ -333,6 +447,19 @@
             var old_active_user = document.getElementById('user_' + currentId);
             old_active_user.classList.remove('border-l-4')
             old_active_user.classList.remove('border-title')
+            // var _old_video_btn_el =  document.getElementById('video_call_button_' + currentId);
+            // if(!_old_video_btn_el.classList.contains('hidden')) {
+            //     _old_video_btn_el && _old_video_btn_el.classList.add('hidden')
+            // }
+        }
+
+        var _user = online_user_list.find(u => u.userId.toLowerCase() == id.toLowerCase())
+        if(_user) {
+            (video_btn_el.classList.contains('hidden')) && video_btn_el.classList.remove('hidden')
+            video_btn_el.setAttribute('userId', id)
+        }
+        else {
+            (!video_btn_el.classList.contains('hidden')) && video_btn_el.classList.add('hidden')
         }
 
         var active_user = document.getElementById('user_' + id);
@@ -341,19 +468,16 @@
     
         currentId = id;
         img_upload_btn.classList.remove('hidden');
+        file_upload_btn.classList.remove('hidden');
         var msg_box = document.getElementById('chat-messages');
         msg_box.innerHTML = '';
         window.socket.emit("user:chat", id, (chat) => {
-            console.log('chat', chat);
             chat.forEach(c => {
                 var type = id == c.userId_1 ? 'receive' : 'send';
-                console.log('type', type)
-                if(c.message_type == 'message') {
-                    append_message(type, c._id, c.message, c.image);
-                }
-                else {
-                    append_message(type, c._id, c.message, c.image, 'image');
-                }
+                // if(c.message_type == 'message') {
+                //     append_message(type, c._id, c.message, c.image);
+                // }
+                append_message(type, c._id, c.message, c.image, c.message_type);
             });
             setTimeout(() => {
                 msg_box.scrollTo(0, msg_box.scrollHeight);
@@ -364,5 +488,96 @@
             }, 50);
         });
     }
+
+    function toggleModal(modalID){
+        isModalOpen = !isModalOpen;
+        document.getElementById(modalID).classList.toggle("hidden");
+        document.getElementById(modalID + "-backdrop").classList.toggle("hidden");
+        //   document.getElementById(modalID).classList.toggle("flex");
+        //   document.getElementById(modalID + "-backdrop").classList.toggle("flex");
+        if(myCall) {
+            myCall.close();
+            myCall = null;
+        }
+    }
+
+    function makeCall() {
+        var _userId = video_btn_el.getAttribute('userId');
+        if(!_userId) return;
+
+        window.socket.emit('get:peer:id', _userId, (_peerId) => {
+            console.log('_peerId', _peerId);
+            alert('_peerId, ' + _peerId);
+            var _video = document.createElement('video');
+
+            if(!_peerId) return;
+            getUserMedia({video: true, audio: true}, function(stream) {
+                addVideoStream(video_el, stream)
+                myStream = stream;
+                console.log('send call', _peerId)
+                var call = peer.call(_peerId, stream);
+                myCall = call;
+                call.on('stream', function(remoteStream) {
+                    // Show stream in some video/canvas element.
+                    addVideoStream(_video, remoteStream)
+                    peers[_userId] = call;
+                    close_call_btn.setAttribute('userId', _userId);
+                });
+
+                call.on('close', () => {
+                    _video.remove();
+                    video_el.remove();
+                    call.close();
+                });
+            }, function(err) {
+                console.log('Failed to get local stream 1' ,err);
+            });
+        })
+
+        
+    }
+
+    peer.on('call', function(call) {
+        console.log('receive call', call)
+
+        // var isReceive = confirm('Do you want to receive the call?');
+        // if(!isReceive) return;
+        var _video = document.createElement('video');
+        getUserMedia({video: true, audio: true}, function(stream) {
+            if(!isModalOpen) {
+                // isModalOpen = true
+                toggleModal('modal-id');
+            }
+            call.answer(stream); // Answer the call with an A/V stream.
+            addVideoStream(video_el, stream)
+            call.on('stream', function(remoteStream) {
+                // Show stream in some video/canvas element.
+                addVideoStream(_video, remoteStream)
+            });
+
+            call.on('close', () => {
+                _video.remove();
+                video_el.remove();
+                call.close();
+            });
+        }, function(err) {
+            console.log('Failed to get local stream 2' ,err);
+        });
+    });
+
+    peer.on('open', (id) => {
+        console.log('peer open', id);
+        setTimeout(() => {
+            window.socket.emit('user-peerId-update', id);
+        }, 3000);
+    });
+
+    const addVideoStream = (video, stream) => {
+        video.srcObject = stream;
+        video.addEventListener('loadedmetadata', () => {
+            video.play();
+            videoGrid.append(video);
+        });
+    };
 </script>
 </html>

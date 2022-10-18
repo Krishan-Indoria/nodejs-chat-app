@@ -24,5 +24,61 @@
     <div class="h-12 w-12 rounded-full shadow-lg bg-secondary grid items-center justify-center cursor-pointer" id="logout-btn">
         <img class="h-6 w-6" src="/logout.svg" />
     </div>
+   
+    <!-- Model Start -->
+    
+      <div class="hidden overflow-x-hidden overflow-y-auto fixed inset-0 z-50 outline-none focus:outline-none justify-center items-center" id="modal-id">
+        <div class="relative w-auto my-6 mx-auto max-w-3xl">
+          <!--content-->
+          <div class="border-0 rounded-lg shadow-lg relative flex flex-col w-full bg-white outline-none focus:outline-none">
+            <!--header-->
+            <div class="flex items-start justify-between p-5 border-b border-solid border-slate-200 rounded-t bg-secondary">
+              <h3 class="text-3xl font-semibold text-title">
+                Username
+              </h3>
+              <!-- <button class="p-1 ml-auto bg-transparent border-0 text-black opacity-5 float-right text-3xl leading-none font-semibold outline-none focus:outline-none" onclick="toggleModal('modal-id')">
+                <span class="bg-red-400 text-black opacity-5 h-6 w-6 text-2xl block outline-none focus:outline-none">
+                  X
+                </span>
+              </button> -->
+            </div>
+            <!--body-->
+            <div
+            id="video_grid"
+            class="relative p-4 bg-primary grid object-fit-cover grid-cols-2"
+            style="width: 100%; height:auto">
+              <!-- <p class="my-4 text-slate-500 text-lg leading-relaxed">
+                I always felt like I could do anything. Thats the main
+                thing people are controlled by! Thoughts- their perception
+                of themselves! They're slowed down by their perception of
+                themselves. If you're taught you cant do anything, you
+                wont do anything. I was taught I could do everything.
+              </p> -->
+            </div>
+            <!--footer-->
+            <div class="flex items-center justify-end p-6 border-t border-solid border-slate-200 rounded-b bg-secondary">
+              <!-- <button class="text-red-500 background-transparent font-bold uppercase px-6 py-2 text-sm outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150" type="button" onclick="toggleModal('modal-id')">
+                Close
+              </button> -->
+              <button
+              id="make_call_btn"
+              class="bg-title text-white active:bg-teal-600 font-bold uppercase text-sm px-6 py-3 rounded shadow hover:shadow-lg outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150"
+              type="button"
+              onclick="makeCall()">
+                Make Call
+              </button>
+              <button
+              class="bg-red-400 text-white active:bg-red-600 font-bold uppercase text-sm px-6 py-3 rounded shadow hover:shadow-lg outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150"
+              type="button"
+              id="close_call"
+              onclick="toggleModal('modal-id')">
+                Close Call
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="hidden opacity-25 fixed inset-0 z-40 bg-black" id="modal-id-backdrop"></div>
+
 </div>
     

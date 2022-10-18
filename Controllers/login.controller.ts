@@ -150,4 +150,41 @@ export const ImageUpload = async (req: Request, res: Response) => {
     }
 }
 
+export const FileUpload = async (req: Request, res: Response) => {
+    try {
+        const files = req.files;
+        if(!files || !files.file) {
+            throw new Error('please select file')
+        }
+        
+        var f: any = files.file;
+        var imgtype = f.mimetype.split('/');
+        
+        var filetype = imgtype[1];
+        var filename = 'chat_file_' + new Date().getTime() + '.' + filetype;
+
+        var dest_path = path.join(__dirname, '..', 'files', filename);
+        f.mv(dest_path, (err: any) => {
+            if(err) {
+                res.json({
+                    status: false,
+                    message: err?.message || err
+                });
+            }
+            else {
+                res.json({
+                    status: true,
+                    image: filename
+                });
+            }
+        })
+    }
+    catch (err: any) {
+        res.json({
+            status: false,
+            message: err.message
+        });
+    }
+}
+
 // export function getUserChat()

@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const conn_string: any = process.env.MONGO_URI || '';
+const conn_string = process.env.MONGO_URI as string || '';
 
 class Connection {
   private connString: string;
